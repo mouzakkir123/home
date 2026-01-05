@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dr. Md. Mouzakkir Hossain - Fluid Dynamics Research</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+      }
+    }
+    </script>
+    
+    <style>
+        /* Custom animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
+        .animate-scale-in { animation: scaleIn 0.3s ease-out forwards; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-700">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            BookOpen, Award, Mail, Linkedin, ExternalLink, GraduationCap, 
+            Microscope, Menu, X, Download, Home, Wind, Waves, Activity, 
+            Users, ArrowRight, Image as ImageIcon
+        } from 'lucide-react';
+
+        // --- 1. Background Components (Unchanged) ---
+
+        const FluidBackground = () => {
+          const canvasRef = useRef(null);
+          const mouseRef = useRef({ x: 0, y: 0 });
+
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            let animationFrameId;
+            let particles = [];
+            let hueCycle = 0;
+            
+            const resizeCanvas = () => {
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
+            };
+
+            const flowScale = 0.003; 
+            const speedBase = 1.2;
+            
+            class Particle {
+              constructor() {
+                this.reset();
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+              }
+
+              reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 1;
+                this.life = Math.random() * 100 + 50;
+                this.opacity = 0;
+                this.maxOpacity = Math.random() * 0.6 + 0.3;
+                this.vx = 0;
+                this.vy = 0;
+              }
+
+              update(mouseX, mouseY, time) {
+                const angle = (Math.cos(this.x * flowScale) + Math.sin(this.y * flowScale) + Math.sin(time * 0.001)) * Math.PI * 2;
+                this.vx = Math.cos(angle) * speedBase;
+                this.vy = Math.sin(angle) * speedBase;
+
+                const dx = this.x - mouseX;
+                const dy = this.y - mouseY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const interactionRadius = 200;
+
+                if (distance < interactionRadius) {
+                  const force = (interactionRadius - distance) / interactionRadius;
+                  this.vx += (dx / distance) * force * 5;
+                  this.vy += (dy / distance) * force * 5;
+                }
+
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+
+                if (this.life < 20) this.opacity -= 0.03;
+                else if (this.opacity < this.maxOpacity) this.opacity += 0.03;
+
+                if (this.life <= 0 || this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                  this.reset();
+                }
+              }
+
+              draw() {
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                const positionalHue = (this.x / canvas.width) * 60 + (this.y / canvas.height) * 60; 
+                const dynamicHue = 240 - (speed * 40); 
+                const finalHue = (positionalHue + dynamicHue + hueCycle) % 360;
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${finalHue}, 70%, 55%, ${this.opacity})`;
+                ctx.fill();
+              }
+            }
+
+            const init = () => {
+              resizeCanvas();
+              particles = [];
+              const count = Math.min((canvas.width * canvas.height) / 4000, 400); 
+              for (let i = 0; i < count; i++) {
+                particles.push(new Particle());
+              }
+            };
+
+            let time = 0;
+            const animate = () => {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'; 
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              time++;
+              hueCycle += 0.1; 
+
+              particles.forEach(particle => {
+                particle.update(mouseRef.current.x, mouseRef.current.y, time);
+                particle.draw();
+              });
+              animationFrameId = requestAnimationFrame(animate);
+            };
+
+            const handleMouseMove = (e) => {
+              mouseRef.current = { x: e.clientX, y: e.clientY };
+            };
+
+            window.addEventListener('resize', () => { resizeCanvas(); init(); });
+            window.addEventListener('mousemove', handleMouseMove);
+
+            init();
+            animate();
+
+            return () => {
+              window.removeEventListener('resize', resizeCanvas);
+              window.removeEventListener('mousemove', handleMouseMove);
+              cancelAnimationFrame(animationFrameId);
+            };
+          }, []);
+
+          return <canvas ref={canvasRef} className="fixed top-0 left-0 w-full h-full -z-10 bg-white" />;
+        };
+
+        const ComputationalGrid = () => (
+            <div className="absolute inset-0 overflow-hidden opacity-[0.15] pointer-events-none select-none z-0 mix-blend-multiply">
+                <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                    <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#1e293b" strokeWidth="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)" />
+                </svg>
+            </div>
+        );
+
+        // --- 2. Navigation (Unchanged) ---
+        
+        const Navbar = ({ activeTab, setActiveTab }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const navLinks = [
+                { name: 'Home', id: 'home' },
+                { name: 'Research', id: 'research' },
+                { name: 'Publications', id: 'publications' },
+                { name: 'CV', id: 'cv' },
+                { name: 'Contact', id: 'contact' },
+            ];
+
+            const handleNavClick = (id) => {
+                setActiveTab(id);
+                setIsOpen(false);
+                window.scrollTo(0, 0);
+            };
+
+            return (
+                <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-md shadow-sm z-50 border-b border-white/40 supports-[backdrop-filter]:bg-white/60">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between h-16 items-center">
+                    <div className="flex-shrink-0 flex items-center cursor-pointer gap-2" onClick={() => handleNavClick('home')}>
+                        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                        <Waves size={18} />
+                        </div>
+                        <span className="font-bold text-xl text-slate-900 tracking-tight">Dr. Hossain</span>
+                    </div>
+                    
+                    <div className="hidden md:flex space-x-1">
+                        {navLinks.map((link) => (
+                        <button key={link.id} onClick={() => handleNavClick(link.id)}
+                            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                            activeTab === link.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-700 hover:text-indigo-600 hover:bg-white/50'
+                            }`}>
+                            {link.name}
+                        </button>
+                        ))}
+                    </div>
+
+                    <div className="md:hidden flex items-center">
+                        <button onClick={() => setIsOpen(!isOpen)} className="text-slate-800 hover:text-slate-900 focus:outline-none p-2 bg-white/50 rounded-lg">
+                        {isOpen ? <X size={24} /> : <Menu size={24} />}
+                        </button>
+                    </div>
+                    </div>
+                </div>
+
+                {isOpen && (
+                    <div className="md:hidden bg-white/95 border-t border-slate-100 backdrop-blur-xl absolute w-full">
+                    <div className="px-4 pt-2 pb-4 space-y-1">
+                        {navLinks.map((link) => (
+                        <button key={link.id} onClick={() => handleNavClick(link.id)}
+                            className={`block w-full text-left px-4 py-3 rounded-xl text-base font-medium ${
+                            activeTab === link.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:text-indigo-600 hover:bg-slate-50'
+                            }`}>
+                            {link.name}
+                        </button>
+                        ))}
+                    </div>
+                    </div>
+                )}
+                </nav>
+            );
+        };
+
+        // --- 3. NEW & MODIFIED COMPONENTS ---
+
+        // NEW: Modal Component to show project details
+        const ProjectModal = ({ project, onClose }) => {
+            if (!project) return null;
+
+            // Close if clicked outside content
+            const handleBackdropClick = (e) => {
+                if (e.target === e.currentTarget) {
+                    onClose();
+                }
+            };
+
+            return (
+                <div 
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+                    onClick={handleBackdropClick}
+                >
+                    <div className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-scale-in">
+                        {/* Header */}
+                        <div className={`p-6 bg-gradient-to-r ${project.gradient} text-white flex justify-between items-start shrink-0`}>
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-md">
+                                    <project.icon size={28} />
+                                </div>
+                                <h2 className="text-2xl md:text-3xl font-bold">{project.title}</h2>
+                            </div>
+                            <button 
+                                onClick={onClose}
+                                className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Scrollable Content */}
+                        <div className="overflow-y-auto p-6 md:p-8 space-y-8">
+                            
+                            {/* Images Gallery */}
+                            {project.images && project.images.length > 0 && (
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <ImageIcon size={16} /> Project Visualization
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {project.images.map((img, idx) => (
+                                            <div key={idx} className="rounded-xl overflow-hidden shadow-md border border-slate-100 aspect-video bg-slate-100 relative group">
+                                                <img src={img} alt={`${project.title} visualization ${idx+1}`} className="w-full h-full object-cover" />
+                                                <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors"></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Detailed Text */}
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">About the Research</h3>
+                                <div className="prose prose-lg text-slate-700 leading-relaxed">
+                                    <p className="font-medium text-lg mb-4 text-slate-900">{project.desc}</p>
+                                    {/* Displaying paragraphs from details, separated by newlines */}
+                                    {project.details.split('\n').map((paragraph, i) => (
+                                        <p key={i} className="mb-4">{paragraph}</p>
+                                    ))}
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+                            <button 
+                                onClick={onClose}
+                                className="px-6 py-2 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors"
+                            >
+                                Close Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // MODIFIED: Research Page with Data and Click Handlers
+        const ResearchPage = () => {
+            const [selectedProject, setSelectedProject] = useState(null);
+
+            // Extended Data with details and images
+            const researchData = [
+                { 
+                    title: "Linear Stability Analysis", 
+                    desc: "Investigating the asymptotic stability of shear flows using Orr-Sommerfeld/Squire equations.",
+                    details: "This research focuses on the derivation and numerical solution of the Orr-Sommerfeld and Squire equations to understand the onset of instability in parallel shear flows. \n\nWe utilize spectral collocation methods (Chebyshev polynomials) to discretize the governing equations, resulting in a generalized eigenvalue problem. By analyzing the eigenvalue spectrum, we determine the critical Reynolds numbers and the phase speed of the most unstable modes. This work is fundamental in predicting the transition from laminar to turbulent flow in channels and boundary layers.",
+                    icon: Activity,
+                    gradient: "from-blue-500 to-indigo-500",
+                    images: ["https://placehold.co/600x400/e2e8f0/1e293b?text=Orr-Sommerfeld+Spectrum", "https://placehold.co/600x400/e2e8f0/1e293b?text=Eigenfunction+Plot"]
+                },
+                { 
+                    title: "Non-Modal Stability", 
+                    desc: "Studying transient growth and energy amplification in sub-critical flow regimes using SVD.",
+                    details: "Traditional eigenvalue analysis often fails to predict transition in sub-critical regimes where the flow is linearly stable but sensitive to finite amplitude perturbations. \n\nOur work employs Non-Modal Stability theory to investigate the transient growth of energy. We calculate the optimal perturbations that lead to maximum energy amplification over a finite time horizon using Singular Value Decomposition (SVD) of the evolution operator. This approach highlights the importance of the non-normality of the linear operator in shear flows.",
+                    icon: Waves,
+                    gradient: "from-purple-500 to-pink-500",
+                    images: ["https://placehold.co/600x400/f3e8ff/581c87?text=Transient+Growth+Curve", "https://placehold.co/600x400/f3e8ff/581c87?text=Optimal+Perturbation"]
+                },
+                { 
+                    title: "CFD & DNS", 
+                    desc: "Direct Numerical Simulations (DNS) of Navier-Stokes equations to validate linear theory.",
+                    details: "To complement our theoretical findings, we perform high-fidelity Direct Numerical Simulations (DNS). \n\nUsing high-order finite difference or spectral element schemes, we solve the full nonlinear Navier-Stokes equations without turbulence models. These simulations allow us to track the evolution of disturbances into the nonlinear regime, observe saturation mechanisms, and visualize the breakdown into turbulence.",
+                    icon: Microscope,
+                    gradient: "from-orange-500 to-red-500",
+                    images: ["https://placehold.co/600x400/fff7ed/c2410c?text=Vorticity+Contours", "https://placehold.co/600x400/fff7ed/c2410c?text=DNS+Grid+Mesh"]
+                },
+                { 
+                    title: "Flow Control", 
+                    desc: "Strategies to delay transition to turbulence or suppress vortex shedding.",
+                    details: "Building on stability analysis, we design active and passive flow control mechanisms. \n\nThis involves optimizing surface properties (e.g., slippery surfaces, porous walls) or applying external forcing to dampen unstable modes. The goal is to reduce drag, enhance lift, or suppress noise in engineering applications.",
+                    icon: Award,
+                    gradient: "from-violet-500 to-fuchsia-500",
+                    images: ["https://placehold.co/600x400/fdf4ff/86198f?text=Control+Loop", "https://placehold.co/600x400/fdf4ff/86198f?text=Drag+Reduction+Data"]
+                }
+            ];
+
+            return (
+                <div className="py-12 md:py-20 max-w-7xl mx-auto px-4 sm:px-6 animate-fade-in relative z-10">
+                    <div className="text-center mb-16 bg-white/70 backdrop-blur-md py-10 rounded-3xl shadow-sm border border-white/60">
+                        <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">Research Areas</h2>
+                        <p className="text-xl text-slate-800 max-w-3xl mx-auto font-medium">
+                            Unraveling the physics of fluid motion through theoretical analysis and high-fidelity computing.
+                        </p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {researchData.map((item, idx) => (
+                            <div 
+                                key={idx} 
+                                onClick={() => setSelectedProject(item)}
+                                className="group bg-white/80 backdrop-blur-md p-8 rounded-3xl shadow-lg shadow-indigo-900/5 border border-white/60 hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col h-full"
+                            >
+                                {/* Hover Gradient Overlay */}
+                                <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
+                                
+                                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center mb-6 text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                                    <item.icon size={28} />
+                                </div>
+                                
+                                <h3 className="text-xl font-bold text-slate-900 mb-3 group-hover:text-indigo-700 transition-colors">{item.title}</h3>
+                                <p className="text-slate-700 leading-relaxed text-sm font-medium mb-6 flex-grow">{item.desc}</p>
+                                
+                                <div className="mt-auto pt-4 border-t border-slate-100 flex items-center text-indigo-600 font-bold text-sm group-hover:translate-x-2 transition-transform">
+                                    Read More <ArrowRight size={16} className="ml-2" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Render Modal */}
+                    <ProjectModal 
+                        project={selectedProject} 
+                        onClose={() => setSelectedProject(null)} 
+                    />
+                </div>
+            );
+        };
+
+        // --- 4. Unchanged Page Components ---
+
+        const HomePage = ({ setActiveTab }) => (
+            <div className="relative flex flex-col items-center justify-start min-h-[calc(100vh-64px)] px-4 pt-8 pb-16 animate-fade-in overflow-y-auto">
+            <ComputationalGrid />
+            
+            <div className="relative z-10 max-w-5xl mx-auto mt-4 bg-white/60 backdrop-blur-md p-8 md:p-12 rounded-3xl border border-white/60 shadow-xl shadow-slate-900/5 mb-8 text-center">
+                <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-800 text-sm font-medium mb-8 animate-fade-in-up shadow-sm">
+                <Award className="w-4 h-4 mr-2" />
+                Postdoctoral Fellow
+                </div>
+                
+                <h1 className="text-5xl md:text-8xl font-extrabold text-slate-900 tracking-tight mb-6 leading-tight drop-shadow-sm">
+                Dr. Md. Mouzakkir <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-blue-700 to-indigo-600">Hossain</span>
+                </h1>
+                
+                <p className="text-xl md:text-2xl text-slate-800 mb-10 max-w-3xl mx-auto leading-relaxed font-medium">
+                Specializing in <span className="font-bold text-black">Hydrodynamic Stability</span>, 
+                Direct Numerical Simulations, and the transition to turbulence in complex flows.
+                </p>
+                
+                <div className="flex flex-col sm:flex-row justify-center gap-4 mb-12">
+                <button onClick={() => setActiveTab('research')}
+                    className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-2xl text-white bg-slate-900 hover:bg-slate-800 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5">
+                    <Waves className="w-5 h-5 mr-2" />
+                    Explore Research
+                </button>
+                <button onClick={() => setActiveTab('publications')}
+                    className="inline-flex items-center justify-center px-8 py-4 border border-slate-300 text-lg font-medium rounded-2xl text-slate-800 bg-white/80 hover:bg-white shadow-sm hover:shadow-md transition-all">
+                    <BookOpen className="w-5 h-5 mr-2" />
+                    Publications
+                </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto border-t border-slate-300 pt-8">
+                <div>
+                    <div className="text-3xl font-bold text-slate-900">5 Physics of Fluid</div>
+                    <div className="text-sm text-slate-700 font-bold uppercase tracking-wide">Featured Paper</div>
+                </div>
+                <div>
+                    <div className="text-3xl font-bold text-slate-900">GATE</div>
+                    <div className="text-sm text-slate-700 font-bold uppercase tracking-wide">Qualified</div>
+                </div>
+                <div>
+                    <div className="text-3xl font-bold text-slate-900">PhD</div>
+                    <div className="text-sm text-slate-700 font-bold uppercase tracking-wide">Fluid Mechanics</div>
+                </div>
+                </div>
+            </div>
+
+            <div className="relative z-10 max-w-5xl mx-auto bg-white/70 backdrop-blur-md p-8 md:p-12 rounded-3xl border border-white/60 shadow-xl shadow-slate-900/5 grid md:grid-cols-5 gap-10 items-center">
+                <div className="md:col-span-3 text-left">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6 flex items-center">
+                    <GraduationCap className="w-8 h-8 mr-3 text-indigo-600" />
+                    About Dr. Hossain
+                </h2>
+                <p className="text-slate-700 leading-relaxed text-lg mb-6">
+                    Dr. Md. Mouzakkir Hossain is an accomplished researcher in the field of Computational Fluid Dynamics. He is currently serving as a <span className="font-semibold text-slate-900">Postdoctoral Researcher</span> at the School of Energy Science and Engineering, Harbin Institute of Technology, China. Prior to this, he was a Junior and Senior Research Fellow working on DST-SERB sponsored projects in India.
+                </p>
+                <p className="text-slate-700 leading-relaxed text-lg">
+                    He has qualified prestigious national examinations including <span className="font-semibold text-slate-900">GATE</span> and <span className="font-semibold text-slate-900">CSIR-UGC NET</span>. His research integrates complex mathematical modeling with high-fidelity Direct Numerical Simulations (DNS) to explore transition scenarios in shear flows. His work is published in leading journals such as the <em>Journal of Fluid Mechanics</em>, <em>Physics of Fluids</em>, and <em>Applied Mathematical Modelling</em>.
+                </p>
+                </div>
+                
+                <div className="md:col-span-2">
+                <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white/80 transform rotate-1 hover:rotate-0 transition-transform duration-500">
+                    <img src="Zakkir.jpg" alt="Dr. Md. Mouzakkir Hossain" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 to-transparent"></div>
+                </div>
+                </div>
+            </div>
+            </div>
+        );
+
+        const PublicationsPage = () => {
+            const papers = [
+            { title: "Stability dynamics of surfactant-contaminated double-layered viscoelastic fluid flowing down an inclined plane", authors: "Md. Mouzakkir Hossain, Youchuang Chao", journal: "Division of Fluid Dynamics Annual Meeting", year: "2025", link: "https://archive.aps.org/dfd/2025/a23/3/" },
+            { title: "Stability of surfactant-laden double-layered viscoelastic fluids flowing over an inclined plane", authors: "Md Mouzakkir Hossain, Mohamin Khan, Youchuang Chao", journal: "arXiv preprint", year: "2025", link: "https://arxiv.org/abs/2510.04250" },
+            { title: "Instability behavior of odd viscosity-induced viscous fluid over a vibrating bed", authors: "Md. Mouzakkir Hossain, Mrityunjoy Saha, Harekrushna Behera, Sukhendu Ghosh", journal: "arXiv preprint", year: "2024", link: "https://arxiv.org/pdf/2409.20482?" },
+            { title: "Odd-viscosity induced surfactant-laden shear-imposed viscous film over a slippery incline: A stability analysis", authors: "Md. Mouzakkir Hossain, Sukhendu Ghosh, Harekrushna Behera", journal: "Meccanica", year: "2024", link: "https://www.researchgate.net/profile/Md-Hossain-1002/publication/383080716_Hydrodynamic_instability_of_shear_imposed_falling_film_over_a_uniformly_heated_inclined_undulated_substrate/links/6732f0744a70511f071bdafc/Hydrodynamic-instability-of-shear-imposed-falling-film-over-a-uniformly-heated-inclined-undulated-substrate.pdf" },
+            { title: "Hydrodynamic instability of shear imposed falling film over a uniformly heated inclined undulated substrate", authors: "Md. Mouzakkir Hossain, Sukhendu Ghosh, Harekrushna Behera, G. P. Raja Sekhar", journal: "Physics of Fluids", year: "2024", link: "https://pubs.aip.org/aip/pof/article/36/8/083606/3307747" },
+            { title: "Impact of a floating flexible plate on the stability of double-layered falling flow", authors: "Md. Mouzakkir Hossain, Sukhendu Ghosh, Harekrushna Behera", journal: "Applied Mathematical Modelling", year: "2024", link: "https://www.sciencedirect.com/science/article/pii/S0307904X24002269" },
+            { title: "Hydrodynamic stability analysis of shear-layered fluid flow over a porous bed in the presence of a floating elastic plate", authors: "Dipankar Paul, Md. Mouzakkir Hossain, Harekrushna Behera", journal: "International Journal of Non-Linear Mechanics", year: "2024", link: "https://www.sciencedirect.com/science/article/pii/S0020746223002512" },
+            { title: "Hydrodynamic instability of odd-viscosity-induced shear-imposed falling film", authors: "Dipankar Paul, Md. Mouzakkir Hossain, Harekrushna Behera", journal: "Physics of Fluids", year: "2023", link: "https://pubs.aip.org/aip/pof/article/35/3/034101/2882038" },
+            { title: "Instability mechanism of shear-layered fluid in the presence of a floating elastic plate", authors: "Md. Mouzakkir Hossain, Chia-Cheng Tsai, Harekrushna Behera", journal: "Physics of Fluids", year: "2023", link: "https://pubs.aip.org/aip/pof/article/35/2/027102/2869162" },
+            { title: "Shear-imposed falling thin Newtonian film over a porous slippery surface", authors: "Md. Mouzakkir Hossain, Harekrushna Behera", journal: "Physics of Fluids", year: "2022", link: "https://pubs.aip.org/aip/pof/article/34/11/114124/2847553" },
+            { title: "Linear instability of a surfactant-laden shear imposed falling film over an inclined porous bed", authors: "Md. Mouzakkir Hossain, Harekrushna Behera", journal: "Physics of Fluids", year: "2022", link: "https://pubs.aip.org/aip/pof/article/34/8/084111/2847360" }
+            ];
+
+            const collaborators = [
+                { name: "Prof. Harekrushna Behera", img: "hkb.jpg" },
+                { name: "Prof. Youchuang Chao", img: "chao.jpg" },
+                { name: "Prof. Sukhendu Ghosh", img: "Sukhendu.jpg" },
+                { name: "Prof. G. P. Raja Sekhar", img: "GPRaja.jpg" },
+                { name: "Prof. Chia-Cheng Tsai", img: "tsai.png" },
+                { name: "Dipankar Paul", img: "Paul.png" },
+                { name: "Dr. Mohamin Khan", img: "MBMKhan.jpg" },
+                { name: "Mrityunjoy Saha", img: "Saha.jpg" },
+                { name: "", img: "dp1.jpg" },
+                { name: "", img: "dp2.jpg" },
+            ];
+
+            return (
+            <div className="py-12 md:py-20 max-w-5xl mx-auto px-4 sm:px-6 animate-fade-in">
+                <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-sm border border-white/60 mb-10">
+                <h2 className="text-3xl font-bold text-slate-900">Publications</h2>
+                </div>
+
+                <div className="space-y-8 mb-20">
+                {/* Featured JFM Paper */}
+                <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 text-white p-8 md:p-12 rounded-3xl shadow-2xl border border-slate-700 group">
+                    <div className="absolute top-0 right-0 w-80 h-80 bg-pink-500 rounded-full mix-blend-overlay filter blur-[60px] opacity-30 -mr-20 -mt-20 group-hover:opacity-40 transition-opacity duration-1000"></div>
+                    <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-500 rounded-full mix-blend-overlay filter blur-[60px] opacity-30 -ml-20 -mb-20 group-hover:opacity-40 transition-opacity duration-1000"></div>
+                    
+                    <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-6">
+                        <div className="inline-block px-3 py-1 bg-white/10 border border-white/20 text-indigo-100 text-xs font-bold uppercase tracking-wider rounded-full backdrop-blur-sm">Featured Publication</div>
+                        <BookOpen className="text-indigo-300 opacity-60" size={32} />
+                    </div>
+                    
+                    <h3 className="text-2xl md:text-3xl font-bold mb-6 font-serif leading-tight">"Instability mechanism of shear-layered fluid in the presence of a floating elastic plate"</h3>
+                    
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-indigo-100/80 text-sm mb-8">
+                        <div className="flex items-center"><span className="font-semibold text-white">Md. Mouzakkir Hossain</span></div>
+                        <div className="flex items-center">Chia-Cheng Tsai</div>
+                        <div className="flex items-center">Harekrushna Behera</div>
+                        <div className="flex items-center px-2 py-1 bg-white/10 rounded border border-white/10"><span className="font-bold text-pink-200">Physics of Fluid (2023)</span></div>
+                    </div>
+                    
+                    <p className="text-indigo-50/90 mb-8 max-w-3xl leading-relaxed text-lg font-light">
+                        This work investigates the instability mechanisms of a shear-imposed flow down a vibrating inclined plane, revealing new insights into how vibration affects the stability boundaries of such flows.
+                    </p>
+                    
+                    <div className="flex flex-wrap gap-4">
+                        <a href="#" className="bg-white text-indigo-950 px-6 py-3 rounded-xl font-bold text-sm flex items-center hover:bg-indigo-50 transition-colors shadow-lg">
+                        View Journal <ExternalLink size={16} className="ml-2" />
+                        </a>
+                    </div>
+                    </div>
+                </div>
+
+                <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-lg shadow-slate-200/50 border border-white/50 overflow-hidden">
+                    <div className="px-8 py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="font-bold text-slate-800 text-lg">Peer-Reviewed Journals</h3>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Recent Works</span>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                    {papers.map((paper, idx) => (
+                        <div key={idx} className="p-8 hover:bg-indigo-50/40 transition-colors group">
+                        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                            <div className="flex-1">
+                            <h4 className="text-lg font-bold text-slate-800 group-hover:text-indigo-700 transition-colors leading-snug">{paper.title}</h4>
+                            <p className="text-slate-600 mt-2 text-sm"><span className="font-medium text-slate-900">{paper.authors}</span></p>
+                            <div className="flex items-center gap-3 text-sm pt-3">
+                                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200">{paper.journal}</span>
+                                <span className="text-slate-400">•</span>
+                                <span className="text-slate-500 font-bold">{paper.year}</span>
+                            </div>
+                            </div>
+                            <div className="flex-shrink-0">
+                            <a href={paper.link} className="inline-flex items-center px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors shadow-sm">
+                                View Journal <ExternalLink size={14} className="ml-2" />
+                            </a>
+                            </div>
+                        </div>
+                        </div>
+                    ))}
+                    </div>
+                </div>
+                </div>
+
+                <div className="relative animate-fade-in-up">
+                <div className="flex items-center mb-10">
+                    <div className="p-2 bg-indigo-100 rounded-lg text-indigo-700 mr-4"><Users size={24} /></div>
+                    <h2 className="text-3xl font-bold text-slate-900">Co-authors & Collaborators</h2>
+                </div>
+
+                <div className="bg-white/60 backdrop-blur-md rounded-3xl p-10 border border-white/60 shadow-xl shadow-slate-200/50">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-y-12 gap-x-8">
+                    {collaborators.map((person, idx) => (
+                        <div key={idx} className="flex flex-col items-center text-center group">
+                        <div className="relative mb-4">
+                            <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg group-hover:scale-110 transition-transform duration-300 ring-4 ring-transparent group-hover:ring-indigo-100">
+                            <img src={person.img} alt={person.name} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="absolute inset-0 rounded-full bg-indigo-500 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-sm leading-tight group-hover:text-indigo-700 transition-colors">{person.name}</h4>
+                        </div>
+                    ))}
+                    </div>
+                </div>
+                </div>
+            </div>
+            );
+        };
+
+        const CVPage = () => (
+            <div className="py-12 md:py-20 max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in">
+            <div className="flex justify-between items-end mb-12 border-b border-slate-200/60 pb-6 bg-white/70 backdrop-blur-sm p-6 rounded-2xl shadow-sm">
+                <div>
+                <h2 className="text-4xl font-bold text-slate-900 mb-2">Curriculum Vitae</h2>
+                <p className="text-slate-600 font-medium">Academic trajectory and achievements</p>
+                </div>
+                <a href="./Curriculum_Vitae_Zakkir.pdf" download="Curriculum_Vitae_Zakkir.pdf" className="flex items-center px-5 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors text-sm font-medium shadow-lg hover:shadow-xl">
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
+                </a>
+            </div>
+
+            <div className="space-y-16">
+                <section>
+                <h3 className="flex items-center text-xl font-bold text-slate-900 mb-8 bg-white/70 inline-block px-4 py-2 rounded-xl backdrop-blur-sm">
+                    <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center mr-3"><Microscope size={18} /></span>
+                    Research Experience
+                </h3>
+                <div className="relative border-l-2 border-slate-300 ml-4 space-y-12">
+                    <div className="relative pl-12 group">
+                    <span className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-blue-600 ring-4 ring-white shadow-sm"></span>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline mb-2 bg-white/80 p-4 rounded-xl shadow-sm hover:shadow-md transition-all">
+                        <div>
+                        <h4 className="text-xl font-bold text-slate-900">Postdoctoral Researcher</h4>
+                        <p className="text-lg text-slate-700 font-medium mb-1 mt-1">Harbin Institute of Technology, China</p>
+                        <p className="text-sm text-slate-500">School of Energy Science and Engineering</p>
+                        </div>
+                        <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full mt-2 sm:mt-0 border border-blue-100">Ongoing</span>
+                    </div>
+                    </div>
+
+                    <div className="relative pl-12 group">
+                    <span className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-slate-400 ring-4 ring-white group-hover:bg-blue-400 transition-colors"></span>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline mb-2 bg-white/80 p-4 rounded-xl shadow-sm hover:shadow-md transition-all">
+                        <div>
+                        <h4 className="text-xl font-bold text-slate-900">Junior/Senior Research Fellow (DST-SERB)</h4>
+                        <p className="text-lg text-slate-700 font-medium mb-1 mt-1">SRM Institute of Science and Technology / IIT Jodhpur</p>
+                        </div>
+                        <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full mt-2 sm:mt-0">2019 - 2024</span>
+                    </div>
+                    <div className="bg-white/60 p-4 rounded-xl border border-slate-200 text-sm text-slate-700 italic ml-4">
+                        Worked on DST-SERB sponsored projects focusing on mathematical frameworks of secondary and nonlinear instabilities for complex flow systems.
+                    </div>
+                    </div>
+                </div>
+                </section>
+
+                <section>
+                <h3 className="flex items-center text-xl font-bold text-slate-900 mb-8 bg-white/70 inline-block px-4 py-2 rounded-xl backdrop-blur-sm">
+                    <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center mr-3"><GraduationCap size={18} /></span>
+                    Education
+                </h3>
+                <div className="relative border-l-2 border-slate-300 ml-4 space-y-12">
+                    <div className="relative pl-12 group">
+                    <span className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-indigo-600 ring-4 ring-white shadow-sm"></span>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline mb-2 bg-white/80 p-4 rounded-xl shadow-sm hover:shadow-md transition-all">
+                        <div>
+                        <h4 className="text-xl font-bold text-slate-900">Ph.D. in Mathematics</h4>
+                        <p className="text-lg text-slate-700 font-medium mb-1 mt-1">SRM Institute of Science and Technology, India</p>
+                        </div>
+                        <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full mt-2 sm:mt-0 border border-indigo-100">Feb 2024</span>
+                    </div>
+                    <p className="text-slate-800 leading-relaxed max-w-2xl pl-4 mt-2 font-medium bg-white/40 p-2 rounded-lg text-sm">
+                        <strong>Thesis:</strong> "Dynamics and Instability Mechanisms of single and Double-layered Fluid flow Models."
+                    </p>
+                    </div>
+
+                    <div className="relative pl-12 group">
+                    <span className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-slate-400 ring-4 ring-white group-hover:bg-indigo-400 transition-colors"></span>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline mb-2 bg-white/80 p-4 rounded-xl shadow-sm hover:shadow-md transition-all">
+                        <div>
+                        <h4 className="text-xl font-bold text-slate-900">M.Sc. in Applied Mathematics</h4>
+                        <p className="text-lg text-slate-700 font-medium mb-2 mt-1">University of Calcutta, West Bengal</p>
+                        </div>
+                        <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full mt-2 sm:mt-0">June 2016</span>
+                    </div>
+                    </div>
+
+                    <div className="relative pl-12 group">
+                    <span className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-slate-400 ring-4 ring-white group-hover:bg-indigo-400 transition-colors"></span>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline mb-2 bg-white/80 p-4 rounded-xl shadow-sm hover:shadow-md transition-all">
+                        <div>
+                        <h4 className="text-xl font-bold text-slate-900">B.Sc. in Mathematics</h4>
+                        <p className="text-lg text-slate-700 font-medium mb-2 mt-1">University of Burdwan, West Bengal</p>
+                        </div>
+                        <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full mt-2 sm:mt-0">June 2013</span>
+                    </div>
+                    </div>
+                </div>
+                </section>
+
+                <section>
+                <h3 className="flex items-center text-xl font-bold text-slate-900 mb-8 bg-white/70 inline-block px-4 py-2 rounded-xl backdrop-blur-sm">
+                    <span className="w-8 h-8 rounded-lg bg-yellow-100 text-yellow-600 flex items-center justify-center mr-3"><Award size={18} /></span>
+                    Awards & Qualifications
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                    {[
+                    { title: "CSIR-UGC NET", sub: "Qualified June & Dec 2018", color: "indigo" },
+                    { title: "GATE Qualified", sub: "2018 & 2021", color: "emerald" },
+                    { title: "WBSET Qualified", sub: "2017 (West Bengal State Eligibility Test)", color: "purple" },
+                    { title: "Senior Research Fellow", sub: "DST-SERB Project (2022)", color: "amber" },
+                    { title: "Junior Research Fellow", sub: "DST-SERB Project (2019-2022)", color: "blue" }
+                    ].map((item, i) => (
+                    <div key={i} className={`p-5 rounded-2xl border bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all border-${item.color}-100 flex items-center hover:scale-[1.02] duration-200`}>
+                        <div className={`w-10 h-10 rounded-full bg-${item.color}-50 flex items-center justify-center text-${item.color}-600 mr-4`}><Award size={20} /></div>
+                        <div>
+                        <div className="font-bold text-slate-800">{item.title}</div>
+                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{item.sub}</div>
+                        </div>
+                    </div>
+                    ))}
+                </div>
+                </section>
+            </div>
+            </div>
+        );
+
+        const ContactPage = () => (
+            <div className="py-12 md:py-20 max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in relative z-10">
+            <div className="bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl text-center relative border border-slate-800">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600 rounded-full mix-blend-overlay filter blur-[100px] opacity-40 -mr-20 -mt-20"></div>
+                <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-500 rounded-full mix-blend-overlay filter blur-[100px] opacity-40 -ml-20 -mb-20"></div>
+
+                <div className="relative z-10 p-12 md:p-20 flex flex-col items-center justify-center">
+                <div className="max-w-3xl text-white">
+                    <h2 className="text-4xl md:text-5xl font-bold mb-6">Let's Connect</h2>
+                    <p className="text-slate-300 mb-12 leading-relaxed text-lg font-light max-w-2xl mx-auto">
+                    Open to collaborations on stability analysis, CFD projects, and academic discussions. Feel free to reach out via email.
+                    </p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+                    <div className="flex flex-col items-center p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+                        <div className="w-12 h-12 bg-indigo-500/20 rounded-full flex items-center justify-center mb-4 text-indigo-300"><Home size={24} /></div>
+                        <span className="font-bold text-white mb-1">Permanent</span>
+                        <span className="text-sm text-slate-400">West Bengal, India</span>
+                    </div>
+                    <div className="flex flex-col items-center p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+                        <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mb-4 text-purple-300"><Wind size={24} /></div>
+                        <span className="font-bold text-white mb-1">Current</span>
+                        <span className="text-sm text-slate-400">Harbin, China</span>
+                    </div>
+                    <div className="flex flex-col items-center p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+                        <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 text-emerald-300"><Activity size={24} /></div>
+                        <span className="font-bold text-white mb-1">Phone</span>
+                        <span className="text-sm text-slate-400">+86-18945686075</span>
+                    </div>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="mailto:mouzakkir123@gmail.com" className="inline-flex items-center justify-center px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg hover:shadow-indigo-500/30 transform hover:-translate-y-1">
+                        <Mail className="w-5 h-5 mr-2" />
+                        mouzakkir123@gmail.com
+                    </a>
+                    <div className="flex gap-4 justify-center">
+                        <a href="#" className="inline-flex items-center justify-center p-4 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all border border-white/10 backdrop-blur-sm hover:-translate-y-1"><Linkedin className="w-6 h-6" /></a>
+                        <a href="#" className="inline-flex items-center justify-center p-4 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all border border-white/10 backdrop-blur-sm hover:-translate-y-1"><ExternalLink className="w-6 h-6" /></a>
+                    </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+            </div>
+        );
+
+        // --- 5. Main App & Render ---
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('home');
+
+            const renderContent = () => {
+                switch(activeTab) {
+                    case 'home': return <HomePage setActiveTab={setActiveTab} />;
+                    case 'research': return <ResearchPage />;
+                    case 'publications': return <PublicationsPage />;
+                    case 'cv': return <CVPage />;
+                    case 'contact': return <ContactPage />;
+                    default: return <HomePage setActiveTab={setActiveTab} />;
+                }
+            };
+
+            return (
+                <div className="font-sans text-slate-700 min-h-screen relative overflow-hidden selection:bg-indigo-200 selection:text-indigo-900">
+                    <FluidBackground />
+                    <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <main className="pt-24 pb-12 transition-opacity duration-300 ease-in-out">
+                        {renderContent()}
+                    </main>
+                    <footer className="w-full text-center py-6 text-slate-700 text-xs font-medium tracking-wide bg-white/40 backdrop-blur-sm">
+                        &copy; {new Date().getFullYear()} Dr. Hossain. Fluid Dynamics Research Group.
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+    </script>
+</body>
+</html>
