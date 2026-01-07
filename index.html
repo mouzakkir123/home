@@ -445,8 +445,8 @@
         };
 
         const PublicationsPage = ({ data, isEditing, updateArrayItem, addArrayItem, deleteArrayItem, setData }) => {
-            // Updated addPub to use empty string for link instead of "#"
-            const addPub = () => addArrayItem('publications', { title: "New Paper", authors: "Authors...", journal: "Journal Name", year: "2024", link: "" });
+            // Updated addPub to use prepend = true
+            const addPub = () => addArrayItem('publications', { title: "New Paper", authors: "Authors...", journal: "Journal Name", year: "2024", link: "" }, true);
             
             // Collaborators logic
             const addCollab = () => {
@@ -507,7 +507,6 @@
                                 {isEditing && (
                                     <div className="mt-4 pt-4 border-t border-white/10">
                                         <label className="text-xs text-indigo-300 font-bold uppercase mr-2">Link:</label>
-                                        {/* Added logic to show empty string if value is "#" */}
                                         <input type="text" value={data.publications[0].link === "#" ? "" : data.publications[0].link} onChange={(e) => updateArrayItem('publications', 0, 'link', e.target.value)} className="bg-black/30 border border-white/20 rounded px-2 py-1 text-xs text-white w-full max-w-sm" placeholder="https://doi.org/..."/>
                                     </div>
                                 )}
@@ -543,7 +542,6 @@
                                             {isEditing && (
                                                 <div className="flex items-center bg-slate-100 rounded px-2 py-1 mr-2">
                                                     <LinkIcon size={12} className="text-slate-400 mr-2"/>
-                                                    {/* Added logic to show empty string if value is "#" */}
                                                     <input type="text" value={paper.link === "#" ? "" : paper.link} onChange={(e) => updateArrayItem('publications', idx + 1, 'link', e.target.value)} className="bg-transparent text-xs outline-none w-24" placeholder="URL..."/>
                                                 </div>
                                             )}
@@ -778,7 +776,13 @@
                     return { ...prev, [category]: newArr };
                 });
             };
-            const addArrayItem = (category, template) => { setData(prev => ({ ...prev, [category]: [...prev[category], template] })); };
+            // UPDATED: Added 'prepend' argument
+            const addArrayItem = (category, template, prepend = false) => { 
+                setData(prev => ({ 
+                    ...prev, 
+                    [category]: prepend ? [template, ...prev[category]] : [...prev[category], template] 
+                })); 
+            };
             const deleteArrayItem = (category, index) => { const newArr = data[category].filter((_, i) => i !== index); setData(prev => ({ ...prev, [category]: newArr })); };
 
             if (loading || !data) return <div className="h-screen flex items-center justify-center text-indigo-600 animate-pulse flex-col gap-4"><Loader2 size={32} className="animate-spin" /><span>Loading Content...</span></div>;
