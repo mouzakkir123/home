@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dr. Md. Mouzakkir Hossain - Fluid Dynamics Research</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            const errorBox = document.getElementById('global-error-box');
+            if (errorBox) {
+                errorBox.style.display = 'block';
+                errorBox.innerHTML += `<div><strong>Critical Error:</strong> ${message} <br/><small>${source}:${lineno}</small></div>`;
+            }
+        };
+    </script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+      }
+    }
+    </script>
+    
+    <style>
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
+        .animate-fade-in-up { animation: fadeIn 0.8s ease-out forwards; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -10; }
+        #global-error-box { display: none; position: fixed; top: 0; left: 0; width: 100%; background: #fee2e2; color: #991b1b; padding: 20px; z-index: 9999; border-bottom: 2px solid #b91c1c; font-family: monospace; }
+        #debug-console { position: fixed; bottom: 0; left: 0; width: 100%; height: 150px; background: rgba(0, 0, 0, 0.85); color: #00ff00; font-family: monospace; font-size: 12px; padding: 10px; overflow-y: auto; z-index: 10000; display: none; border-top: 2px solid #00ff00; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-700">
+    <div id="global-error-box"></div>
+    <div id="debug-console"></div>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            BookOpen, Award, Mail, Linkedin, ExternalLink, GraduationCap, Microscope,
+            Menu, X, Download, Home, Wind, Waves, Activity, Users, Lock, Unlock, Save, Plus, Trash2, Edit3,
+            AlertCircle, Database, Check, UploadCloud, Image as ImageIcon, Loader2, Terminal, FileText, Star,
+            ArrowRight, Layers, Bookmark, Binary, User, Link as LinkIcon
+        } from 'lucide-react';
+
+        // --- Logger ---
+        const logToConsole = (msg) => {
+            const consoleDiv = document.getElementById('debug-console');
+            const time = new Date().toLocaleTimeString();
+            consoleDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            console.log(`[App] ${msg}`);
+        };
+
+        // --- Helper: Ensure Protocol for Links ---
+        const ensureProtocol = (url) => {
+            if (!url) return "#";
+            if (url.trim() === "#") return "#";
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                return 'https://' + url;
+            }
+            return url;
+        };
+
+        // --- Firebase Config ---
+        // NOTE: It is safe for this config to be public IF you set up Firestore Rules correctly.
+        const MANUAL_FIREBASE_CONFIG = {
+          apiKey: "AIzaSyAeO59fn8pukFqw0MzmVFMwIBxqYMmXnHY",
+          authDomain: "dr-hossain-portfolio.firebaseapp.com",
+          projectId: "dr-hossain-portfolio",
+          storageBucket: "dr-hossain-portfolio.firebasestorage.app",
+          messagingSenderId: "925067385020",
+          appId: "1:925067385020:web:3cf71c1ede053100c898b9"
+        };
+
+        let auth, db, appId;
+        let isFirebaseAvailable = false;
+
+        try {
+            let configToUse = null;
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                configToUse = JSON.parse(__firebase_config);
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            } else if (MANUAL_FIREBASE_CONFIG && MANUAL_FIREBASE_CONFIG.apiKey) {
+                configToUse = MANUAL_FIREBASE_CONFIG;
+                appId = 'manual-portfolio-app';
+            }
+
+            if (configToUse) {
+                if (typeof firebase === 'undefined') throw new Error("Firebase SDK not loaded.");
+                if (!firebase.apps.length) firebase.initializeApp(configToUse);
+                auth = firebase.auth();
+                db = firebase.firestore();
+                isFirebaseAvailable = true;
+            }
+        } catch (error) {
+            logToConsole("Firebase Error: " + error.message);
+        }
+
+        // --- Default Data ---
+        const DEFAULT_DATA = {
+            home: {
+                photoUrl: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=600",
+                role: "Postdoctoral Fellow",
+                name: "Dr. Md. Mouzakkir Hossain",
+                highlightedName: "Hossain",
+                description: "Specializing in Hydrodynamic Stability, Direct Numerical Simulations, and the transition to turbulence in complex flows.",
+                aboutTitle: "About Dr. Hossain",
+                aboutText1: "Dr. Md. Mouzakkir Hossain is an accomplished researcher in the field of Computational Fluid Dynamics. He is currently serving as a Postdoctoral Researcher at the School of Energy Science and Engineering, Harbin Institute of Technology, China.",
+                aboutText2: "He has qualified prestigious national examinations including GATE and CSIR-UGC NET. His research integrates complex mathematical modeling with high-fidelity Direct Numerical Simulations (DNS).",
+                stats: [
+                    { value: "5", label: "Physics of Fluid", sub: "Featured Paper" },
+                    { value: "GATE", label: "Qualified", sub: "" },
+                    { value: "PhD", label: "Fluid Mechanics", sub: "" }
+                ]
+            },
+            research: [
+                { 
+                    title: "Linear Stability Analysis", 
+                    desc: "Investigating the asymptotic stability of shear flows using Orr-Sommerfeld/Squire equations.", 
+                    details: "This research focuses on the mathematical derivation and numerical solution of the Orr-Sommerfeld and Squire equations to predict the onset of instability in various shear flows.",
+                    figures: [], 
+                    icon: "Activity", 
+                    color: "bg-purple-100 text-purple-600" 
+                },
+                { 
+                    title: "Non-Modal Stability", 
+                    desc: "Studying transient growth and energy amplification in sub-critical flow regimes.", 
+                    details: "While linear theory predicts asymptotic stability, many flows transition to turbulence due to transient growth. We utilize Singular Value Decomposition (SVD).",
+                    figures: [], 
+                    icon: "Layers", 
+                    color: "bg-pink-100 text-pink-600" 
+                },
+                { 
+                    title: "CFD & DNS", 
+                    desc: "Direct Numerical Simulations (DNS) of Navier-Stokes equations.", 
+                    details: "We perform high-fidelity DNS using open-source solvers like OpenFOAM and custom pseudo-spectral codes.",
+                    figures: [], 
+                    icon: "Binary", 
+                    color: "bg-orange-100 text-orange-600" 
+                }
+            ],
+            publications: [
+                { 
+                    title: "Instability mechanism of shear-layered fluid in the presence of a floating elastic plate", 
+                    authors: "Md. Mouzakkir Hossain, Chia-Cheng Tsai, Harekrushna Behera", 
+                    journal: "Physics of Fluids", 
+                    year: "2023", 
+                    link: "#",
+                    desc: "This paper explores the complex interaction between shear flows and elastic boundaries, revealing new instability modes."
+                },
+                { 
+                    title: "Hydrodynamic instability of odd-viscosity-induced shear-imposed falling film", 
+                    authors: "Dipankar Paul, Md. Mouzakkir Hossain, Harekrushna Behera", 
+                    journal: "Physics of Fluids", 
+                    year: "2023", 
+                    link: "#",
+                    desc: ""
+                }
+            ],
+            collaborators: [
+                { name: "Prof. Youcheng Chao", photoUrl: "" },
+                { name: "Prof. Harekrushna Behera", photoUrl: "" },
+                { name: "Prof. Subhendu Ghosh", photoUrl: "" }
+            ],
+            cv: {
+                pdfUrl: "",
+                experience: [
+                    { title: "Postdoctoral Researcher", org: "Harbin Institute of Technology, China", time: "Ongoing", desc: "School of Energy Science and Engineering" }
+                ],
+                education: [
+                    { title: "Ph.D. in Mathematics", org: "SRM Institute of Science and Technology", time: "Feb 2024", desc: "Thesis: Dynamics and Instability Mechanisms." },
+                    { title: "M.Sc. in Applied Mathematics", org: "University of Calcutta", time: "June 2016", desc: "" }
+                ],
+                awards: [
+                    { title: "CSIR-UGC NET", date: "June 2019", desc: "Qualified Joint CSIR-UGC Test" }
+                ]
+            },
+            contact: {
+                email: "mouzakkir123@gmail.com",
+                phone: "+86-18945686075",
+                location: "Harbin, China",
+                permanent: "West Bengal, India"
+            }
+        };
+
+        // --- Components ---
+        const EditableField = ({ value, onChange, isEditing, className = "", multiline = false, placeholder = "Edit text..." }) => {
+            if (!isEditing) return <span className={className}>{value}</span>;
+            if (multiline) {
+                return <textarea value={value} onChange={(e) => onChange(e.target.value)} className={`w-full p-2 border border-indigo-300 rounded bg-white/90 text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none ${className}`} rows={4}/>;
+            }
+            return <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className={`w-full min-w-[100px] p-1 border-b-2 border-indigo-300 bg-transparent text-slate-800 focus:border-indigo-600 outline-none ${className}`} placeholder={placeholder}/>;
+        };
+
+        const FluidBackground = () => {
+            const canvasRef = useRef(null);
+            const mouseRef = useRef({ x: 0, y: 0 });
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationFrameId;
+                let particles = [];
+                let hueCycle = 0;
+                const resizeCanvas = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+                class Particle {
+                    constructor() { this.reset(); this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height; }
+                    reset() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height; this.size = Math.random() * 2 + 1; this.life = Math.random() * 100 + 50; this.opacity = 0; this.maxOpacity = Math.random() * 0.6 + 0.3; this.vx = 0; this.vy = 0; }
+                    update(mouseX, mouseY, time) {
+                        const angle = (Math.cos(this.x * 0.003) + Math.sin(this.y * 0.003) + Math.sin(time * 0.001)) * Math.PI * 2;
+                        this.vx = Math.cos(angle) * 1.2; this.vy = Math.sin(angle) * 1.2;
+                        const dx = this.x - mouseX; const dy = this.y - mouseY; const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < 200) { const force = (200 - distance) / 200; this.vx += (dx / distance) * force * 5; this.vy += (dy / distance) * force * 5; }
+                        this.x += this.vx; this.y += this.vy; this.life--;
+                        if (this.life < 20) this.opacity -= 0.03; else if (this.opacity < this.maxOpacity) this.opacity += 0.03;
+                        if (this.life <= 0 || this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) { this.reset(); }
+                    }
+                    draw() {
+                        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy); const finalHue = ((this.x / canvas.width) * 60 + (this.y / canvas.height) * 60 + (240 - speed * 40) + hueCycle) % 360;
+                        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fillStyle = `hsla(${finalHue}, 70%, 55%, ${this.opacity})`; ctx.fill();
+                    }
+                }
+                const init = () => { resizeCanvas(); particles = []; const count = Math.min((canvas.width * canvas.height) / 4000, 300); for (let i = 0; i < count; i++) particles.push(new Particle()); };
+                let time = 0;
+                const animate = () => { ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'; ctx.fillRect(0, 0, canvas.width, canvas.height); time++; hueCycle += 0.1; particles.forEach(p => { p.update(mouseRef.current.x, mouseRef.current.y, time); p.draw(); }); animationFrameId = requestAnimationFrame(animate); };
+                const handleMouseMove = (e) => mouseRef.current = { x: e.clientX, y: e.clientY };
+                window.addEventListener('resize', () => { resizeCanvas(); init(); }); window.addEventListener('mousemove', handleMouseMove); init(); animate();
+                return () => { window.removeEventListener('resize', resizeCanvas); window.removeEventListener('mousemove', handleMouseMove); cancelAnimationFrame(animationFrameId); };
+            }, []);
+            return <canvas ref={canvasRef} id="bg-canvas" />;
+        };
+
+        const Navbar = ({ activeTab, setActiveTab, isAdmin, isEditing, setIsEditing, handleSave, isSaving }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const navLinks = [ { name: 'Home', id: 'home' }, { name: 'Research', id: 'research' }, { name: 'Publications', id: 'publications' }, { name: 'CV', id: 'cv' }, { name: 'Contact', id: 'contact' }, ];
+            const toggleDebug = () => {
+                const el = document.getElementById('debug-console');
+                el.style.display = el.style.display === 'block' ? 'none' : 'block';
+            };
+
+            return (
+                <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-md shadow-sm z-50 border-b border-white/40">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="flex justify-between h-16 items-center">
+                            <div className="flex-shrink-0 flex items-center cursor-pointer gap-2" onClick={() => setActiveTab('home')}>
+                                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg"> <Waves size={18} /> </div>
+                                <span className="font-bold text-xl text-slate-900 tracking-tight">Dr. Hossain</span>
+                            </div>
+                            <div className="hidden md:flex space-x-1">
+                                {navLinks.map(link => ( <button key={link.id} onClick={() => { setActiveTab(link.id); window.scrollTo(0,0); }} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === link.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-700 hover:text-indigo-600'}`}> {link.name} </button> ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button onClick={toggleDebug} className="p-2 text-slate-400 hover:text-red-500" title="Toggle Debug Console"><Terminal size={16}/></button>
+                                {isAdmin && (
+                                    <button onClick={() => isEditing ? handleSave() : setIsEditing(true)} className={`p-2 rounded-full shadow-sm transition-all text-white ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-800 hover:bg-slate-700'} ${isSaving ? 'opacity-80 cursor-wait' : ''}`} title={isEditing ? "Save Changes" : "Edit Mode"} disabled={isSaving}>
+                                            {isSaving ? <Loader2 size={18} className="animate-spin" /> : (isEditing ? <Save size={18} /> : <Edit3 size={18} />)}
+                                    </button>
+                                )}
+                                <div className="md:hidden"> <button onClick={() => setIsOpen(!isOpen)} className="p-2 text-slate-800 bg-white/50 rounded-lg"> {isOpen ? <X size={24} /> : <Menu size={24} />} </button> </div>
+                            </div>
+                        </div>
+                    </div>
+                    {isOpen && ( <div className="md:hidden bg-white/95 border-t border-slate-100 backdrop-blur-xl absolute w-full"> <div className="px-4 pt-2 pb-4 space-y-1"> {navLinks.map(link => ( <button key={link.id} onClick={() => { setActiveTab(link.id); setIsOpen(false); }} className={`block w-full text-left px-4 py-3 rounded-xl text-base font-medium ${activeTab === link.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}> {link.name} </button> ))} </div> </div> )}
+                </nav>
+            );
+        };
+
+        const HomePage = ({ data, isEditing, updateHome, updateStats, setActiveTab }) => {
+            if (!data || !data.home) return null;
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.size > 100000) { alert("File too large!"); return; }
+                const reader = new FileReader();
+                reader.onloadend = () => { updateHome('photoUrl', reader.result); };
+                reader.readAsDataURL(file);
+            };
+            return (
+                <div className="relative flex flex-col items-center justify-start min-h-[calc(100vh-64px)] px-4 pt-8 pb-16 animate-fade-in">
+                    <div className="relative z-10 max-w-5xl mx-auto mt-4 bg-white/60 backdrop-blur-md p-8 md:p-12 rounded-3xl border border-white/60 shadow-xl shadow-slate-900/5 mb-8 text-center">
+                        <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-800 text-sm font-medium mb-8 shadow-sm"> <Award className="w-4 h-4 mr-2" /> <EditableField isEditing={isEditing} value={data.home.role} onChange={(v) => updateHome('role', v)} /> </div>
+                        <h1 className="text-5xl md:text-8xl font-extrabold text-slate-900 tracking-tight mb-6 leading-tight drop-shadow-sm"> <EditableField isEditing={isEditing} value={data.home.name.replace(data.home.highlightedName, "")} onChange={(v) => updateHome('name', v + data.home.highlightedName)} /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-blue-700 to-indigo-600"> <EditableField isEditing={isEditing} value={data.home.highlightedName} onChange={(v) => updateHome('highlightedName', v)} /> </span> </h1>
+                        <div className="text-xl md:text-2xl text-slate-800 mb-10 max-w-3xl mx-auto leading-relaxed font-medium"> <EditableField isEditing={isEditing} value={data.home.description} onChange={(v) => updateHome('description', v)} multiline /> </div>
+                        <div className="flex flex-col sm:flex-row justify-center gap-4 mb-12"> <button onClick={() => setActiveTab('research')} className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-2xl text-white bg-slate-900 hover:bg-slate-800 shadow-lg transition-all"> <Waves className="w-5 h-5 mr-2" /> Explore Research </button> <button onClick={() => setActiveTab('publications')} className="inline-flex items-center justify-center px-8 py-4 border border-slate-300 text-lg font-medium rounded-2xl text-slate-800 bg-white/80 hover:bg-white shadow-sm transition-all"> <BookOpen className="w-5 h-5 mr-2" /> Publications </button> </div>
+                        <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto border-t border-slate-300 pt-8"> {data.home.stats.map((stat, i) => ( <div key={i}> <div className="text-3xl font-bold text-slate-900"> <EditableField isEditing={isEditing} value={stat.value} onChange={(v) => updateStats(i, 'value', v)} /> </div> <div className="text-sm text-slate-700 font-bold uppercase tracking-wide"> <EditableField isEditing={isEditing} value={stat.label} onChange={(v) => updateStats(i, 'label', v)} /> </div> {stat.sub && <div className="text-xs text-indigo-600"><EditableField isEditing={isEditing} value={stat.sub} onChange={(v) => updateStats(i, 'sub', v)} /></div>} </div> ))} </div>
+                    </div>
+                    <div className="relative z-10 max-w-5xl mx-auto bg-white/70 backdrop-blur-md p-8 md:p-12 rounded-3xl border border-white/60 shadow-xl shadow-slate-900/5 grid md:grid-cols-5 gap-10 items-center">
+                        <div className="md:col-span-3 text-left"> <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6 flex items-center"> <GraduationCap className="w-8 h-8 mr-3 text-indigo-600" /> <EditableField isEditing={isEditing} value={data.home.aboutTitle} onChange={(v) => updateHome('aboutTitle', v)} /> </h2> <div className="text-slate-700 leading-relaxed text-lg mb-6 space-y-4"> <p><EditableField isEditing={isEditing} value={data.home.aboutText1} onChange={(v) => updateHome('aboutText1', v)} multiline /></p> <p><EditableField isEditing={isEditing} value={data.home.aboutText2} onChange={(v) => updateHome('aboutText2', v)} multiline /></p> </div> </div>
+                        <div className="md:col-span-2">
+                            <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white/80 transform rotate-1 group">
+                                <img src={data.home.photoUrl || "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=600"} alt="Dr. Hossain" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 to-transparent pointer-events-none"></div>
+                                {isEditing && ( <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"> <label className="cursor-pointer bg-white text-indigo-900 px-4 py-2 rounded-lg font-bold flex items-center mb-2 shadow-lg hover:bg-indigo-50 transition-colors"> <UploadCloud size={16} className="mr-2"/> Upload Photo <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} /> </label> <span className="text-white text-xs mb-2">or paste URL:</span> <div className="flex items-center w-3/4 bg-white rounded overflow-hidden"> <div className="pl-2 text-gray-400"><ImageIcon size={12}/></div> <input type="text" value={data.home.photoUrl} onChange={(e) => updateHome('photoUrl', e.target.value)} className="w-full px-2 py-1 text-xs text-black outline-none" placeholder="https://..." /> </div> <span className="text-gray-300 text-[10px] mt-2 max-w-[80%] text-center">Max 100KB for upload.<br/>Use URL for high-res.</span> </div> )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ResearchPage = ({ data, isEditing, updateArrayItem, addArrayItem, deleteArrayItem }) => {
+            const [selected, setSelected] = useState(null);
+
+            const addResearch = () => addArrayItem('research', { 
+                title: "New Area", 
+                desc: "Description here", 
+                details: "Detailed description here...", 
+                figures: [], 
+                icon: "Activity", 
+                color: "bg-gray-100 text-gray-600" 
+            });
+
+            // Handle Image Upload for Research Figure (Multiple)
+            const handleFigureAdd = (e, idx) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                if (file.size > 200000) { alert("Image too large (Max 200KB)."); return; }
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const currentFigures = data.research[idx].figures || [];
+                    const newFigures = [...currentFigures, reader.result];
+                    updateArrayItem('research', idx, 'figures', newFigures);
+                };
+                reader.readAsDataURL(file);
+            };
+
+            const handleFigureDelete = (resIdx, figIdx) => {
+                const currentFigures = [...data.research[resIdx].figures];
+                currentFigures.splice(figIdx, 1);
+                updateArrayItem('research', resIdx, 'figures', currentFigures);
+            };
+
+            const IconMap = { 'Activity': Activity, 'Layers': Layers, 'Binary': Binary, 'Bookmark': Bookmark, 'Wind': Wind };
+
+            return (
+                <div className="py-12 md:py-20 max-w-7xl mx-auto px-4 sm:px-6 animate-fade-in relative z-10">
+                    <div className="text-center mb-16"> 
+                        <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">Research Areas</h2> 
+                        <p className="text-xl text-slate-600 max-w-3xl mx-auto font-medium">Unraveling the physics of fluid motion through theoretical analysis and high-fidelity computing.</p> 
+                        {isEditing && ( <button onClick={addResearch} className="mt-8 bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center mx-auto hover:bg-indigo-700 shadow-lg"> <Plus size={16} className="mr-2" /> Add Research Area </button> )} 
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto"> 
+                        {data.research.map((item, idx) => {
+                            const IconComponent = IconMap[item.icon] || Activity;
+                            return (
+                                <div key={idx} className="bg-white p-8 rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 relative group flex flex-col items-start h-full"> 
+                                    {isEditing && ( <button onClick={() => deleteArrayItem('research', idx)} className="absolute top-4 right-4 text-red-500 hover:text-red-700 p-2 bg-slate-50 rounded-full"> <Trash2 size={18} /> </button> )} 
+                                    
+                                    <div className={`w-14 h-14 rounded-2xl ${item.color} flex items-center justify-center mb-6`}> 
+                                        <IconComponent size={28} /> 
+                                    </div> 
+                                    
+                                    <h3 className="text-2xl font-bold text-slate-900 mb-3"> 
+                                        <EditableField isEditing={isEditing} value={item.title} onChange={(v) => updateArrayItem('research', idx, 'title', v)} /> 
+                                    </h3> 
+                                    
+                                    <div className="text-slate-500 leading-relaxed mb-8 flex-grow"> 
+                                        <EditableField isEditing={isEditing} value={item.desc} onChange={(v) => updateArrayItem('research', idx, 'desc', v)} multiline /> 
+                                    </div> 
+                                    
+                                    <button 
+                                        onClick={() => setSelected({ ...item, idx })} 
+                                        className="text-indigo-600 font-bold flex items-center hover:text-indigo-800 transition-colors mt-auto"
+                                    > 
+                                        Read More <ArrowRight size={16} className="ml-2" /> 
+                                    </button> 
+                                </div> 
+                            );
+                        })} 
+                    </div>
+
+                    {/* Modal for Details */}
+                    {selected && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelected(null)}></div>
+                            <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative z-10 p-8 md:p-12 shadow-2xl animate-fade-in-up">
+                                <button onClick={() => setSelected(null)} className="absolute top-6 right-6 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors">
+                                    <X size={24} />
+                                </button>
+                                
+                                <div className={`inline-flex p-3 rounded-2xl ${selected.color} mb-6`}>
+                                    {React.createElement(IconMap[selected.icon] || Activity, { size: 32 })}
+                                </div>
+
+                                <h3 className="text-3xl md:text-4xl font-bold text-slate-900 mb-6">
+                                    {isEditing ? 
+                                        <EditableField isEditing={true} value={data.research[selected.idx].title} onChange={(v) => updateArrayItem('research', selected.idx, 'title', v)} />
+                                        : selected.title
+                                    }
+                                </h3>
+
+                                {/* Figures Section (Top) */}
+                                <div className="mb-8">
+                                    {isEditing && (
+                                        <div className="mb-4">
+                                            <label className="cursor-pointer inline-flex items-center px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg font-bold text-sm hover:bg-indigo-100 transition-colors">
+                                                <Plus size={16} className="mr-2"/> Add Figure
+                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFigureAdd(e, selected.idx)} />
+                                            </label>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {(data.research[selected.idx].figures || []).map((imgUrl, figIdx) => (
+                                            <div key={figIdx} className="relative group">
+                                                <img src={imgUrl} alt={`Fig ${figIdx}`} className="w-full h-48 object-cover rounded-xl shadow-md border border-slate-100" />
+                                                {isEditing && (
+                                                    <button onClick={() => handleFigureDelete(selected.idx, figIdx)} className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+                                                        <Trash2 size={14}/>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="prose prose-lg text-slate-600">
+                                    {isEditing ? 
+                                        <EditableField isEditing={true} value={data.research[selected.idx].details || ""} placeholder="Add detailed description..." onChange={(v) => updateArrayItem('research', selected.idx, 'details', v)} multiline rows={8} />
+                                        : <p>{selected.details}</p>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const PublicationsPage = ({ data, isEditing, updateArrayItem, addArrayItem, deleteArrayItem, setData }) => {
+            const addPub = () => addArrayItem('publications', { title: "New Paper", authors: "Authors...", journal: "Journal Name", year: "2024", link: "#" });
+            
+            // Collaborators logic
+            const addCollab = () => {
+                const newCollabs = [...(data.collaborators || [])];
+                newCollabs.push({ name: "New Name", photoUrl: "" });
+                setData({ ...data, collaborators: newCollabs });
+            };
+            const updateCollab = (idx, field, val) => {
+                const newCollabs = [...data.collaborators];
+                newCollabs[idx][field] = val;
+                setData({ ...data, collaborators: newCollabs });
+            };
+            const deleteCollab = (idx) => {
+                const newCollabs = data.collaborators.filter((_, i) => i !== idx);
+                setData({ ...data, collaborators: newCollabs });
+            };
+            const handleCollabPhoto = (e, idx) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                if(file.size > 100000) { alert("Max 100KB"); return; }
+                const reader = new FileReader();
+                reader.onloadend = () => updateCollab(idx, 'photoUrl', reader.result);
+                reader.readAsDataURL(file);
+            };
+
+            return (
+                <div className="py-12 md:py-20 max-w-5xl mx-auto px-4 sm:px-6 animate-fade-in">
+                    <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-sm border border-white/60 mb-10 flex justify-between items-center"> <h2 className="text-3xl font-bold text-slate-900">Publications</h2> {isEditing && ( <button onClick={addPub} className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-indigo-700"> <Plus size={16} className="mr-2" /> Add Paper </button> )} </div>
+                    
+                    {/* Featured Publication */}
+                    {data.publications.length > 0 && (
+                        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 text-white p-8 md:p-12 rounded-3xl shadow-2xl border border-slate-700 group mb-12">
+                            <div className="absolute top-0 right-0 w-80 h-80 bg-pink-500 rounded-full mix-blend-overlay filter blur-[60px] opacity-30 -mr-20 -mt-20"></div>
+                            <div className="relative z-10">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="inline-block px-3 py-1 bg-white/10 border border-white/20 text-indigo-100 text-xs font-bold uppercase rounded-full">Featured</div>
+                                </div>
+                                <h3 className="text-2xl md:text-3xl font-bold mb-6 font-serif leading-tight"> "<EditableField isEditing={isEditing} value={data.publications[0].title} onChange={(v) => updateArrayItem('publications', 0, 'title', v)} />" </h3>
+                                <p className="text-indigo-200 mb-4"> <EditableField isEditing={isEditing} value={data.publications[0].authors} onChange={(v) => updateArrayItem('publications', 0, 'authors', v)} /> </p>
+                                
+                                <div className="mb-6 text-slate-300 text-sm leading-relaxed max-w-2xl">
+                                    {isEditing ? 
+                                        <EditableField isEditing={true} value={data.publications[0].desc || ""} placeholder="Add a short description/abstract..." onChange={(v) => updateArrayItem('publications', 0, 'desc', v)} multiline/> 
+                                        : (data.publications[0].desc && <p>{data.publications[0].desc}</p>)
+                                    }
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="font-bold text-pink-200"><EditableField isEditing={isEditing} value={data.publications[0].journal} onChange={(v) => updateArrayItem('publications', 0, 'journal', v)} /></span>
+                                        <span className="text-slate-400">|</span>
+                                        <span className="text-white"><EditableField isEditing={isEditing} value={data.publications[0].year} onChange={(v) => updateArrayItem('publications', 0, 'year', v)} /></span>
+                                    </div>
+                                    <a href={ensureProtocol(data.publications[0].link)} target="_blank" rel="noreferrer" className="flex items-center px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm font-bold transition-all ml-auto border border-white/10">
+                                        View Journal <ExternalLink size={14} className="ml-2"/>
+                                    </a>
+                                </div>
+                                {isEditing && (
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <label className="text-xs text-indigo-300 font-bold uppercase mr-2">Link:</label>
+                                        <input type="text" value={data.publications[0].link || ""} onChange={(e) => updateArrayItem('publications', 0, 'link', e.target.value)} className="bg-black/30 border border-white/20 rounded px-2 py-1 text-xs text-white w-full max-w-sm" placeholder="https://doi.org/..."/>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-lg border border-white/50 overflow-hidden">
+                        <div className="divide-y divide-slate-100">
+                            {data.publications.slice(1).map((paper, idx) => (
+                                <div key={idx} className="p-8 hover:bg-indigo-50/40 transition-colors relative group">
+                                    {isEditing && (
+                                        <button onClick={() => deleteArrayItem('publications', idx + 1)} className="absolute top-4 right-4 text-red-500 p-1 bg-white rounded-full shadow-sm z-10">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
+                                    <h4 className="text-lg font-bold text-slate-800 leading-snug">
+                                        <EditableField isEditing={isEditing} value={paper.title} onChange={(v) => updateArrayItem('publications', idx + 1, 'title', v)} />
+                                    </h4>
+                                    <p className="text-slate-600 mt-2 text-sm">
+                                        <EditableField isEditing={isEditing} value={paper.authors} onChange={(v) => updateArrayItem('publications', idx + 1, 'authors', v)} />
+                                    </p>
+                                    <div className="flex items-center justify-between pt-4 mt-2 border-t border-slate-100/50">
+                                        <div className="flex items-center gap-3 text-sm">
+                                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200">
+                                                <EditableField isEditing={isEditing} value={paper.journal} onChange={(v) => updateArrayItem('publications', idx + 1, 'journal', v)} />
+                                            </span>
+                                            <span className="text-slate-500 font-bold">
+                                                <EditableField isEditing={isEditing} value={paper.year} onChange={(v) => updateArrayItem('publications', idx + 1, 'year', v)} />
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {isEditing && (
+                                                <div className="flex items-center bg-slate-100 rounded px-2 py-1 mr-2">
+                                                    <LinkIcon size={12} className="text-slate-400 mr-2"/>
+                                                    <input type="text" value={paper.link || ""} onChange={(e) => updateArrayItem('publications', idx + 1, 'link', e.target.value)} className="bg-transparent text-xs outline-none w-24" placeholder="URL..."/>
+                                                </div>
+                                            )}
+                                            <a href={ensureProtocol(paper.link)} target="_blank" rel="noreferrer" className="flex items-center text-indigo-600 hover:text-indigo-800 text-xs font-bold transition-colors">
+                                                View Journal <ExternalLink size={14} className="ml-1"/>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Co-authors & Collaborators Section */}
+                    <div className="mt-20">
+                        <div className="flex items-center justify-between mb-8 bg-white/60 p-6 rounded-2xl border border-slate-200 backdrop-blur-sm">
+                            <h3 className="text-2xl font-bold text-slate-900 flex items-center">
+                                <Users className="mr-3 text-indigo-600" /> Co-authors & Collaborators
+                            </h3>
+                            {isEditing && (
+                                <button onClick={addCollab} className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors">
+                                    + Add Person
+                                </button>
+                            )}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                            {(data.collaborators || []).map((collab, i) => (
+                                <div key={i} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-md transition-all text-center border border-slate-100 relative group">
+                                    {isEditing && (
+                                        <button onClick={() => deleteCollab(i)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 p-1">
+                                            <Trash2 size={14}/>
+                                        </button>
+                                    )}
+                                    <div className="w-20 h-20 mx-auto rounded-full overflow-hidden bg-slate-100 mb-4 border-2 border-indigo-100 relative group-hover:border-indigo-300 transition-colors">
+                                        {collab.photoUrl ? (
+                                            <img src={collab.photoUrl} alt={collab.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-slate-300"><User size={32}/></div>
+                                        )}
+                                        {isEditing && (
+                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                                <label className="cursor-pointer w-full h-full flex items-center justify-center">
+                                                    <UploadCloud className="text-white w-6 h-6"/>
+                                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleCollabPhoto(e, i)} />
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <h4 className="font-bold text-slate-800 text-sm">
+                                        <EditableField isEditing={isEditing} value={collab.name} onChange={(v) => updateCollab(i, 'name', v)} className="text-center w-full" />
+                                    </h4>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const CVPage = ({ data, isEditing, setData }) => {
+            // Helpers
+            const addExp = () => { const newExp = [...data.cv.experience, { title: "New Position", org: "Organization", time: "Year", desc: "Description" }]; setData({...data, cv: {...data.cv, experience: newExp}}); };
+            const updateExp = (idx, field, val) => { const newExp = [...data.cv.experience]; newExp[idx][field] = val; setData({...data, cv: {...data.cv, experience: newExp}}); };
+            const deleteExp = (idx) => { const newExp = data.cv.experience.filter((_, i) => i !== idx); setData({...data, cv: {...data.cv, experience: newExp}}); };
+            const addEdu = () => { const newEdu = [...data.cv.education, { title: "New Degree", org: "University Name", time: "Year", desc: "" }]; setData({...data, cv: {...data.cv, education: newEdu}}); };
+            const updateEdu = (idx, field, val) => { const newEdu = [...data.cv.education]; newEdu[idx][field] = val; setData({...data, cv: {...data.cv, education: newEdu}}); };
+            const deleteEdu = (idx) => { const newEdu = data.cv.education.filter((_, i) => i !== idx); setData({...data, cv: {...data.cv, education: newEdu}}); };
+            const addAward = () => { const newAwards = data.cv.awards ? [...data.cv.awards] : []; newAwards.push({ title: "New Award", date: "Year", desc: "Details" }); setData({...data, cv: {...data.cv, awards: newAwards}}); };
+            const updateAward = (idx, field, val) => { const newAwards = [...data.cv.awards]; newAwards[idx][field] = val; setData({...data, cv: {...data.cv, awards: newAwards}}); };
+            const deleteAward = (idx) => { const newAwards = data.cv.awards.filter((_, i) => i !== idx); setData({...data, cv: {...data.cv, awards: newAwards}}); };
+            const handlePdfUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.size > 400000) { alert("File too large! Max 400KB."); return; }
+                const reader = new FileReader();
+                reader.onloadend = () => { setData({...data, cv: {...data.cv, pdfUrl: reader.result}}); };
+                reader.readAsDataURL(file);
+            };
+
+            return (
+                <div className="py-12 md:py-20 max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in">
+                    <div className="flex flex-col md:flex-row justify-between items-end mb-12 border-b border-slate-200/60 pb-6 bg-white/70 backdrop-blur-sm p-6 rounded-2xl shadow-sm gap-4"> 
+                        <div> <h2 className="text-4xl font-bold text-slate-900 mb-2">Curriculum Vitae</h2> <p className="text-slate-600 font-medium">Academic trajectory and achievements</p> </div> 
+                        <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+                            {isEditing && ( <div className="flex flex-col gap-2 bg-slate-100 p-3 rounded-xl w-full"> <label className="text-xs font-bold text-slate-500 uppercase">1. Upload PDF (Max 400KB)</label> <input type="file" accept="application/pdf" onChange={handlePdfUpload} className="text-xs w-full" /> <div className="text-center text-xs text-slate-400 font-bold">- OR -</div> <label className="text-xs font-bold text-slate-500 uppercase">2. Paste Link (Drive/Dropbox)</label> <input type="text" value={data.cv.pdfUrl} onChange={(e) => setData({...data, cv: {...data.cv, pdfUrl: e.target.value}})} placeholder="https://..." className="p-1 text-xs border rounded" /> </div> )}
+                            <a href={ensureProtocol(data.cv.pdfUrl)} download="Dr_Hossain_CV.pdf" target="_blank" rel="noreferrer" className={`flex items-center px-5 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors text-sm font-medium shadow-lg ${(!data.cv.pdfUrl) ? 'opacity-50 cursor-not-allowed' : ''}`}> <Download className="w-4 h-4 mr-2" /> Download PDF </a> 
+                        </div>
+                    </div>
+                    <div className="space-y-16"> 
+                        <section> 
+                            <div className="flex justify-between items-center mb-8"> <h3 className="flex items-center text-xl font-bold text-slate-900 bg-white/70 inline-block px-4 py-2 rounded-xl backdrop-blur-sm"> <Microscope size={18} className="mr-3 text-blue-600" /> Research Experience </h3> {isEditing && <button onClick={addExp} className="text-blue-600 font-bold text-sm bg-blue-50 px-3 py-1 rounded hover:bg-blue-100">+ Add</button>} </div> 
+                            <div className="relative border-l-2 border-slate-300 ml-4 space-y-12"> {data.cv.experience.map((exp, i) => ( <div key={i} className="relative pl-12 group"> {isEditing && <button onClick={() => deleteExp(i)} className="absolute -left-8 top-0 text-red-400 hover:text-red-600 bg-white rounded-full p-1 shadow-sm"><Trash2 size={16}/></button>} <span className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-blue-600 ring-4 ring-white shadow-sm"></span> <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline mb-2 bg-white/80 p-4 rounded-xl shadow-sm hover:shadow-md transition-all"> <div className="w-full"> <h4 className="text-xl font-bold text-slate-900"><EditableField isEditing={isEditing} value={exp.title} onChange={(v) => updateExp(i, 'title', v)} /></h4> <p className="text-lg text-slate-700 font-medium mb-1 mt-1"><EditableField isEditing={isEditing} value={exp.org} onChange={(v) => updateExp(i, 'org', v)} /></p> <div className="text-sm text-slate-500"><EditableField isEditing={isEditing} value={exp.desc} onChange={(v) => updateExp(i, 'desc', v)} multiline/></div> </div> <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full mt-2 sm:mt-0 border border-blue-100 whitespace-nowrap"> <EditableField isEditing={isEditing} value={exp.time} onChange={(v) => updateExp(i, 'time', v)} /> </span> </div> </div> ))} </div> 
+                        </section> 
+                        <section> 
+                            <div className="flex justify-between items-center mb-8"> <h3 className="flex items-center text-xl font-bold text-slate-900 bg-white/70 inline-block px-4 py-2 rounded-xl backdrop-blur-sm"> <GraduationCap size={18} className="mr-3 text-indigo-600" /> Education </h3> {isEditing && <button onClick={addEdu} className="text-indigo-600 font-bold text-sm bg-indigo-50 px-3 py-1 rounded hover:bg-indigo-100">+ Add</button>} </div>
+                            <div className="relative border-l-2 border-slate-300 ml-4 space-y-12"> {data.cv.education.map((edu, i) => ( <div key={i} className="relative pl-12 group"> {isEditing && <button onClick={() => deleteEdu(i)} className="absolute -left-8 top-0 text-red-400 hover:text-red-600 bg-white rounded-full p-1 shadow-sm"><Trash2 size={16}/></button>} <span className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-indigo-600 ring-4 ring-white shadow-sm"></span> <div className="bg-white/80 p-4 rounded-xl shadow-sm w-full"> <div className="flex justify-between items-start"> <div className="w-full"> <h4 className="text-xl font-bold text-slate-900"><EditableField isEditing={isEditing} value={edu.title} onChange={(v) => updateEdu(i, 'title', v)} /></h4> <p className="text-slate-700 mt-1"><EditableField isEditing={isEditing} value={edu.org} onChange={(v) => updateEdu(i, 'org', v)} /></p> </div> <span className="text-sm text-indigo-600 font-bold whitespace-nowrap ml-4"> <EditableField isEditing={isEditing} value={edu.time} onChange={(v) => updateEdu(i, 'time', v)} /> </span> </div> {(edu.desc || isEditing) && ( <div className="text-sm text-slate-500 mt-2"> <EditableField isEditing={isEditing} value={edu.desc || ""} placeholder="Add description..." onChange={(v) => updateEdu(i, 'desc', v)} multiline /> </div> )} </div> </div> ))} </div> 
+                        </section>
+                        <section>
+                            <div className="flex justify-between items-center mb-8"> <h3 className="flex items-center text-xl font-bold text-slate-900 bg-white/70 inline-block px-4 py-2 rounded-xl backdrop-blur-sm"> <Award size={18} className="mr-3 text-amber-500" /> Awards & Qualifications </h3> {isEditing && <button onClick={addAward} className="text-amber-600 font-bold text-sm bg-amber-50 px-3 py-1 rounded hover:bg-amber-100">+ Add</button>} </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> {(data.cv.awards || []).map((award, i) => ( <div key={i} className="bg-white/90 p-5 rounded-2xl shadow-sm border border-amber-100 hover:shadow-md transition-all relative group"> {isEditing && <button onClick={() => deleteAward(i)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 bg-white p-1 rounded-full shadow-sm z-10"><Trash2 size={14}/></button>} <div className="flex items-start gap-4"> <div className="mt-1 min-w-[32px] h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600"> <Star size={16} fill="currentColor" /> </div> <div className="w-full"> <div className="flex justify-between items-start"> <h4 className="font-bold text-slate-900"><EditableField isEditing={isEditing} value={award.title} onChange={(v) => updateAward(i, 'title', v)} /></h4> <span className="text-xs font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-500 whitespace-nowrap ml-2"> <EditableField isEditing={isEditing} value={award.date} onChange={(v) => updateAward(i, 'date', v)} /> </span> </div> <p className="text-sm text-slate-600 mt-1 leading-snug"> <EditableField isEditing={isEditing} value={award.desc} onChange={(v) => updateAward(i, 'desc', v)} /> </p> </div> </div> </div> ))} </div>
+                        </section>
+                    </div>
+                </div>
+            );
+        };
+
+        const ContactPage = ({ data, isEditing, setData }) => {
+            const updateContact = (field, val) => { setData({ ...data, contact: { ...data.contact, [field]: val } }); };
+            return (
+                <div className="py-12 md:py-20 max-w-5xl mx-auto px-4 sm:px-6 animate-fade-in relative z-10">
+                    <div className="bg-slate-950 rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-800 relative">
+                        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/20 rounded-full mix-blend-screen blur-[100px] -mr-20 -mt-20 pointer-events-none"></div> <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-500/20 rounded-full mix-blend-screen blur-[100px] -ml-20 -mb-20 pointer-events-none"></div>
+                        <div className="relative z-10 p-8 md:p-16 text-center">
+                            <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">Let's Connect</h2> <p className="text-slate-400 mb-12 text-lg max-w-2xl mx-auto leading-relaxed"> Open to collaborations on stability analysis, CFD projects, and academic discussions. Feel free to reach out via email. </p>
+                            <div className="grid md:grid-cols-3 gap-6 mb-12">
+                                <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-2xl flex flex-col items-center hover:bg-slate-800/50 transition-colors group"> <div className="w-12 h-12 rounded-full bg-indigo-900/30 flex items-center justify-center text-indigo-400 mb-4 border border-indigo-500/20 group-hover:scale-110 transition-transform"> <Home size={20} /> </div> <h3 className="text-white font-bold text-lg mb-1">Permanent</h3> <div className="text-slate-400 text-sm"> <EditableField isEditing={isEditing} value={data.contact.permanent} onChange={(v) => updateContact('permanent', v)} className={isEditing ? "bg-white/10 text-white" : ""} /> </div> </div>
+                                <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-2xl flex flex-col items-center hover:bg-slate-800/50 transition-colors group"> <div className="w-12 h-12 rounded-full bg-purple-900/30 flex items-center justify-center text-purple-400 mb-4 border border-purple-500/20 group-hover:scale-110 transition-transform"> <Wind size={20} /> </div> <h3 className="text-white font-bold text-lg mb-1">Current</h3> <div className="text-slate-400 text-sm"> <EditableField isEditing={isEditing} value={data.contact.location} onChange={(v) => updateContact('location', v)} className={isEditing ? "bg-white/10 text-white" : ""} /> </div> </div>
+                                <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-2xl flex flex-col items-center hover:bg-slate-800/50 transition-colors group"> <div className="w-12 h-12 rounded-full bg-teal-900/30 flex items-center justify-center text-teal-400 mb-4 border border-teal-500/20 group-hover:scale-110 transition-transform"> <Activity size={20} /> </div> <h3 className="text-white font-bold text-lg mb-1">Phone</h3> <div className="text-slate-400 text-sm"> <EditableField isEditing={isEditing} value={data.contact.phone} onChange={(v) => updateContact('phone', v)} className={isEditing ? "bg-white/10 text-white" : ""} /> </div> </div>
+                            </div>
+                            <div className="flex flex-col md:flex-row justify-center items-center gap-4"> <div className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-xl flex items-center justify-center gap-3 w-full md:w-auto transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 min-w-[300px] cursor-pointer"> <Mail size={20} /> <EditableField isEditing={isEditing} value={data.contact.email} onChange={(v) => updateContact('email', v)} className="bg-transparent font-bold outline-none text-white text-lg cursor-pointer" /> </div> <div className="flex gap-4"> <button className="w-14 h-14 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 shadow-lg"> <Linkedin size={24} /> </button> <button className="w-14 h-14 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 shadow-lg"> <ExternalLink size={24} /> </button> </div> </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App ---
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('home');
+            const [data, setData] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [isEditing, setIsEditing] = useState(false);
+            const [showLogin, setShowLogin] = useState(false);
+            const [loginPass, setLoginPass] = useState('');
+            const [loginEmail, setLoginEmail] = useState(''); // New State for Email
+            const [loading, setLoading] = useState(true);
+            const [user, setUser] = useState(null);
+            const [error, setError] = useState(null);
+            const [saveStatus, setSaveStatus] = useState(null);
+            const [isSaving, setIsSaving] = useState(false);
+
+            useEffect(() => {
+                let isDataLoaded = false;
+                let unsubscribeSnapshot = () => {};
+                let unsubscribeAuth = () => {};
+
+                const fetchData = async () => {
+                    logToConsole("Starting Data Fetch...");
+                    if (!isFirebaseAvailable) {
+                        logToConsole("Firebase Not Available - Using Default Data");
+                        setData(DEFAULT_DATA);
+                        setLoading(false);
+                        return;
+                    }
+                    try {
+                        logToConsole("Setting up Firestore Listener...");
+                        const docRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('site_content').doc('main');
+                        unsubscribeSnapshot = docRef.onSnapshot((doc) => {
+                            isDataLoaded = true;
+                            if (doc.exists) {
+                                logToConsole("Data received from Firestore!");
+                                setData(doc.data());
+                            } else {
+                                logToConsole("Doc doesn't exist. Creating default...");
+                                docRef.set(DEFAULT_DATA).then(() => logToConsole("Default data created.")).catch(e => logToConsole("Initial write failed: " + e.message));
+                                setData(DEFAULT_DATA);
+                            }
+                            setLoading(false);
+                        }, (err) => {
+                            logToConsole("Firestore Read Error: " + err.code);
+                            if (!isDataLoaded) { setData(DEFAULT_DATA); setLoading(false); isDataLoaded = true; }
+                        });
+                    } catch (e) {
+                        console.error("Setup Error:", e);
+                        if (!isDataLoaded) { setData(DEFAULT_DATA); setLoading(false); }
+                    }
+                    unsubscribeAuth = auth.onAuthStateChanged((u) => { 
+                        setUser(u); 
+                        if(u) {
+                            setIsAdmin(true);
+                            logToConsole("Admin Logged In: " + u.email);
+                        } else {
+                            setIsAdmin(false);
+                        }
+                    });
+                };
+                fetchData();
+                const timer = setTimeout(() => { if (!isDataLoaded) { setData(DEFAULT_DATA); setLoading(false); isDataLoaded = true; } }, 3000); 
+                return () => { clearTimeout(timer); unsubscribeSnapshot(); unsubscribeAuth(); };
+            }, []);
+
+            const handleSave = async () => {
+                if (!isFirebaseAvailable) { alert("Offline Mode: Cannot save."); return; }
+                setIsSaving(true); 
+                try {
+                    const cleanData = JSON.parse(JSON.stringify(data)); 
+                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000));
+                    await Promise.race([ db.collection('artifacts').doc(appId).collection('public').doc('data').collection('site_content').doc('main').set(cleanData), timeout ]);
+                    setIsEditing(false);
+                    setSaveStatus('success');
+                    setTimeout(() => setSaveStatus(null), 3000);
+                } catch (e) {
+                    alert("Error saving data: " + e.message);
+                } finally { setIsSaving(false); }
+            };
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                try {
+                    await auth.signInWithEmailAndPassword(loginEmail, loginPass);
+                    setShowLogin(false);
+                    setLoginPass('');
+                    setLoginEmail('');
+                } catch (error) {
+                    alert("Login Failed: " + error.message);
+                }
+            };
+
+            const handleLogout = () => {
+                auth.signOut();
+                setIsEditing(false);
+            };
+
+            // Helpers
+            const updateHome = (field, val) => setData(prev => ({...prev, home: {...prev.home, [field]: val}}));
+            const updateStats = (idx, field, val) => { const newStats = [...data.home.stats]; newStats[idx][field] = val; setData(prev => ({...prev, home: {...prev.home, stats: newStats}})); };
+            const updateArrayItem = (category, index, field, val) => {
+                setData(prev => {
+                    const newArr = [...prev[category]];
+                    newArr[index] = { ...newArr[index], [field]: val };
+                    return { ...prev, [category]: newArr };
+                });
+            };
+            const addArrayItem = (category, template) => { setData(prev => ({ ...prev, [category]: [...prev[category], template] })); };
+            const deleteArrayItem = (category, index) => { const newArr = data[category].filter((_, i) => i !== index); setData(prev => ({ ...prev, [category]: newArr })); };
+
+            if (loading || !data) return <div className="h-screen flex items-center justify-center text-indigo-600 animate-pulse flex-col gap-4"><Loader2 size={32} className="animate-spin" /><span>Loading Content...</span></div>;
+            if (error) return <div className="h-screen flex items-center justify-center text-red-600">Error: {error}</div>;
+
+            return (
+                <div className="font-sans text-slate-700 min-h-screen relative overflow-hidden selection:bg-indigo-200 selection:text-indigo-900">
+                    <FluidBackground />
+                    <Navbar activeTab={activeTab} setActiveTab={setActiveTab} isAdmin={isAdmin} isEditing={isEditing} setIsEditing={setIsEditing} handleSave={handleSave} isSaving={isSaving} />
+                    <main className="pt-24 pb-12 transition-opacity duration-300 ease-in-out">
+                        {activeTab === 'home' && <HomePage data={data} isEditing={isEditing} updateHome={updateHome} updateStats={updateStats} setActiveTab={setActiveTab} />}
+                        {activeTab === 'research' && <ResearchPage data={data} isEditing={isEditing} updateArrayItem={updateArrayItem} addArrayItem={addArrayItem} deleteArrayItem={deleteArrayItem} />}
+                        {activeTab === 'publications' && <PublicationsPage data={data} isEditing={isEditing} updateArrayItem={updateArrayItem} addArrayItem={addArrayItem} deleteArrayItem={deleteArrayItem} setData={setData} />}
+                        {activeTab === 'cv' && <CVPage data={data} isEditing={isEditing} setData={setData} />}
+                        {activeTab === 'contact' && <ContactPage data={data} isEditing={isEditing} setData={setData} />}
+                    </main>
+                    <footer className="w-full text-center py-6 text-slate-700 text-xs font-medium tracking-wide bg-white/40 backdrop-blur-sm flex justify-center items-center gap-4">
+                        <span>&copy; {new Date().getFullYear()} Dr. Hossain. Fluid Dynamics Research Group.</span>
+                        {isAdmin ? (
+                            <button onClick={handleLogout} className="text-slate-400 hover:text-red-600 transition-colors" title="Logout"> <Unlock size={14} /> </button>
+                        ) : (
+                            <button onClick={() => setShowLogin(true)} className="text-slate-400 hover:text-indigo-600 transition-colors" title="Admin Login"> <Lock size={14} /> </button>
+                        )}
+                    </footer>
+                    {!isFirebaseAvailable && isAdmin && ( <div className="fixed bottom-4 right-4 bg-amber-100 text-amber-800 px-4 py-2 rounded-lg shadow-lg text-xs font-bold flex items-center z-50 animate-bounce"> <AlertCircle size={16} className="mr-2"/> Offline Mode (See Code to Fix) </div> )}
+                    {saveStatus === 'success' && ( <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center z-[70] animate-slide-up"> <Check size={20} className="mr-2" /> <span className="font-bold">Saved Successfully!</span> </div> )}
+                    
+                    {/* Updated Login Modal with Firebase Auth */}
+                    {showLogin && ( 
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"> 
+                            <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full"> 
+                                <h3 className="text-xl font-bold mb-4 text-slate-900">Admin Login</h3> 
+                                <form onSubmit={handleLogin} className="space-y-4"> 
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                                        <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="admin@example.com" className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" autoFocus required /> 
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Password</label>
+                                        <input type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} placeholder="••••••••" className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required /> 
+                                    </div>
+                                    <div className="flex gap-2 pt-2"> 
+                                        <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Sign In</button> 
+                                        <button type="button" onClick={() => setShowLogin(false)} className="flex-1 bg-slate-100 text-slate-600 py-2 rounded-xl font-bold hover:bg-slate-200 transition-colors">Cancel</button> 
+                                    </div> 
+                                </form> 
+                            </div> 
+                        </div> 
+                    )}
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
